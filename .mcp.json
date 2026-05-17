@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "vision": {
+      "command": "/Users/jinxianyu/mcp-servers/.venv/bin/python3",
+      "args": ["/Users/jinxianyu/mcp-servers/vision-server.py"],
+      "env": {
+        "DASHSCOPE_API_KEY": "${DASHSCOPE_API_KEY}"
+      }
+    }
+  }
+}

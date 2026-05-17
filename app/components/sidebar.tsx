@@ -1,15 +1,19 @@
 "use client";
 
+import { Plus, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Session } from "../lib/sessions";
 
 interface SidebarProps {
-  sessions: Session[]; // 所有会话列表（已排序）
-  currentId: string | null; // 当前活跃会话 ID
-  onSelect: (id: string) => void; // 切换会话回调
-  onNew: () => void; // 新建会话回调
-  onDelete: (id: string) => void; // 删除会话回调
-  collapsed: boolean; // 是否折叠侧边栏
-  onToggleCollapse: () => void; // 折叠/展开切换
+  sessions: Session[];
+  currentId: string | null;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  onDelete: (id: string) => void;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 export default function Sidebar({
@@ -21,90 +25,51 @@ export default function Sidebar({
   collapsed,
   onToggleCollapse,
 }: SidebarProps) {
+  // 折叠态：只显示窄条 + 展开/新建按钮
   if (collapsed) {
-    // 折叠态：只显示一个窄条 + 展开按钮
     return (
-      <aside className="flex flex-col items-center w-12 border-r border-zinc-200 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-900/80 py-4 gap-3">
+      <aside className="flex flex-col items-center w-12 border-r border-sidebar-border bg-sidebar py-4 gap-3">
         <button
           onClick={onToggleCollapse}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
           title="展开侧边栏"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M6 4l4 4-4 4" />
-          </svg>
+          <ChevronRight className="size-4" />
         </button>
         <button
           onClick={onNew}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
           title="新建日报"
         >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M8 3v10M3 8h10" />
-          </svg>
+          <Plus className="size-4" />
         </button>
       </aside>
     );
   }
 
-  // 展开态：显示完整侧边栏
+  // 展开态
   return (
-    <aside className="flex flex-col w-64 border-r border-zinc-200 bg-zinc-50/80 dark:border-zinc-800 dark:bg-zinc-900/80">
+    <aside className="flex flex-col w-64 border-r border-sidebar-border bg-sidebar">
       {/* 顶部：新建按钮 + 折叠按钮 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-        <button
-          onClick={onNew}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900 text-white text-sm font-medium hover:bg-zinc-800 transition-colors dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M8 3v10M3 8h10" />
-          </svg>
+      <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border">
+        <Button onClick={onNew} size="sm">
+          <Plus />
           新建日报
-        </button>
+        </Button>
 
         <button
           onClick={onToggleCollapse}
-          className="p-1 rounded-md text-zinc-400 hover:text-zinc-600 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
+          className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
           title="折叠侧边栏"
         >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M10 4l-4 4 4 4" />
-          </svg>
+          <ChevronLeft className="size-4" />
         </button>
       </div>
 
       {/* 会话列表 */}
-      <div className="flex-1 overflow-y-auto">
+      <ScrollArea className="flex-1">
         {sessions.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-zinc-400">
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             暂无历史会话
             <br />
             点击「新建日报」开始
@@ -112,30 +77,30 @@ export default function Sidebar({
         )}
 
         {sessions.map((session) => {
-          const isActive = session.id === currentId; // 当前活跃会话高亮
+          const isActive = session.id === currentId;
           return (
             <div
               key={session.id}
               onClick={() => onSelect(session.id)}
-              className={`group flex items-center justify-between px-4 py-3 cursor-pointer border-b border-zinc-100 dark:border-zinc-800/50 transition-colors ${
+              className={cn(
+                "group flex items-center justify-between px-4 py-3 cursor-pointer border-b border-sidebar-border transition-colors",
                 isActive
-                  ? "bg-white dark:bg-zinc-800 border-l-2 border-l-zinc-900 dark:border-l-zinc-400"
-                  : "hover:bg-zinc-100 dark:hover:bg-zinc-800/50 border-l-2 border-l-transparent"
-              }`}
+                  ? "bg-sidebar-accent border-l-2 border-l-primary"
+                  : "hover:bg-sidebar-accent/50 border-l-2 border-l-transparent"
+              )}
             >
               <div className="min-w-0 flex-1">
-                {/* 标题 */}
                 <p
-                  className={`text-sm truncate ${
+                  className={cn(
+                    "text-sm truncate",
                     isActive
-                      ? "font-medium text-zinc-900 dark:text-zinc-50"
-                      : "text-zinc-700 dark:text-zinc-300"
-                  }`}
+                      ? "font-medium text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground"
+                  )}
                 >
                   {session.title}
                 </p>
-                {/* 更新时间 */}
-                <p className="text-xs text-zinc-400 mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   {new Date(session.updatedAt).toLocaleString("zh-CN", {
                     month: "short",
                     day: "numeric",
@@ -148,27 +113,18 @@ export default function Sidebar({
               {/* 删除按钮：hover 时显示 */}
               <button
                 onClick={(e) => {
-                  e.stopPropagation(); // 阻止冒泡，避免触发 onSelect
+                  e.stopPropagation();
                   onDelete(session.id);
                 }}
-                className="p-1 rounded opacity-0 group-hover:opacity-100 text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 transition-all"
+                className="p-1 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
                 title="删除会话"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path d="M3 5h10M6 5V3.5A0.5 0.5 0 016.5 3h3a0.5 0.5 0 01.5.5V5M5 8v5a1 1 0 001 1h4a1 1 0 001-1V8M7 8v4M9 8v4" />
-                </svg>
+                <Trash2 className="size-3.5" />
               </button>
             </div>
           );
         })}
-      </div>
+      </ScrollArea>
     </aside>
   );
 }

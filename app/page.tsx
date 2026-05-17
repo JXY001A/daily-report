@@ -1,287 +1,319 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import Sidebar from "./components/sidebar";
+import { useState } from "react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
-  type Session,
-  getSessions,
-  getCurrentId,
-  getSessionById,
-  saveSession,
-  deleteSession,
-  setCurrentId,
-  createEmptySession,
-} from "./lib/sessions";
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  FileText,
+  BookOpen,
+  Brain,
+  MessageSquare,
+  PenTool,
+  Lightbulb,
+  BarChart3,
+  Lock,
+} from "lucide-react";
+
+// ——— 工具定义 ——————————————————————————————
+interface Tool {
+  id: string;
+  name: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  status: "active" | "coming-soon";
+  href: string;
+}
+
+const tools: Tool[] = [
+  {
+    id: "daily-digest",
+    name: "AI 日报",
+    description: "智能生成专业日报、周报和工作总结",
+    icon: FileText,
+    color: "from-blue-500 to-cyan-500",
+    status: "active",
+    href: "/daily-digest",
+  },
+  {
+    id: "knowledge-base",
+    name: "知识库",
+    description: "构建个人或团队知识库，AI 智能问答",
+    icon: BookOpen,
+    color: "from-purple-500 to-pink-500",
+    status: "coming-soon",
+    href: "#",
+  },
+  {
+    id: "ai-assistant",
+    name: "AI 助手",
+    description: "基于知识库的智能对话助手",
+    icon: Brain,
+    color: "from-green-500 to-emerald-500",
+    status: "coming-soon",
+    href: "#",
+  },
+  {
+    id: "meeting-notes",
+    name: "会议纪要",
+    description: "自动整理会议内容，生成结构化纪要",
+    icon: MessageSquare,
+    color: "from-orange-500 to-amber-500",
+    status: "coming-soon",
+    href: "#",
+  },
+  {
+    id: "content-writer",
+    name: "内容创作",
+    description: "文章、文案、营销内容智能创作",
+    icon: PenTool,
+    color: "from-rose-500 to-red-500",
+    status: "coming-soon",
+    href: "#",
+  },
+  {
+    id: "idea-generator",
+    name: "灵感激发",
+    description: "头脑风暴、创意激发和方案生成",
+    icon: Lightbulb,
+    color: "from-yellow-500 to-orange-500",
+    status: "coming-soon",
+    href: "#",
+  },
+  {
+    id: "data-analysis",
+    name: "数据分析",
+    description: "上传数据，AI 生成分析报告和可视化",
+    icon: BarChart3,
+    color: "from-indigo-500 to-purple-500",
+    status: "coming-soon",
+    href: "#",
+  },
+];
+
+// 当前活跃的工具（AI 日报）
+const activeTool = tools[0];
 
 export default function Home() {
-  // ── 会话状态 ──────────────────────────────────────────────
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [currentId, setLocalCurrentId] = useState<string | null>(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-
-  // ── 表单状态 ──────────────────────────────────────────────
-  const [content, setContent] = useState("");
-  const [summary, setSummary] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [streaming, setStreaming] = useState(false);
-  const [error, setError] = useState("");
-
-  // debounce 计时器，用于自动保存
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── 初始化：从 localStorage 恢复数据 ─────────────────────
-  // 仅在客户端挂载时执行一次
-  useEffect(() => {
-    const all = getSessions();
-    setSessions(all);
-
-    const savedId = getCurrentId();
-    if (savedId && getSessionById(savedId)) {
-      // 恢复上次关闭时的会话
-      setLocalCurrentId(savedId);
-      const session = getSessionById(savedId)!;
-      setContent(session.content);
-      setSummary(session.summary);
-    } else if (all.length > 0) {
-      // fallback：加载最近更新的会话
-      setLocalCurrentId(all[0].id);
-      setContent(all[0].content);
-      setSummary(all[0].summary);
-    }
-  }, []);
-
-  // ── 自动保存（debounce 1 秒） ──────────────────────────────
-  // 当 content 或 summary 变化时，自动保存到当前会话
-  const autoSave = useCallback(
-    (newContent: string, newSummary: string, id: string | null) => {
-      if (!id) return;
-
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-
-      saveTimer.current = setTimeout(() => {
-        const session = getSessionById(id);
-        if (session) {
-          session.content = newContent;
-          session.summary = newSummary;
-          session.updatedAt = Date.now();
-          saveSession(session);
-
-          // 更新侧边栏列表（排序可能变化）
-          setSessions(getSessions());
-        }
-      }, 1000); // 1 秒 debounce，避免频繁写入
-    },
-    []
-  );
-
-  // 监听 content 变化触发自动保存
-  useEffect(() => {
-    if (currentId) {
-      autoSave(content, summary, currentId);
-    }
-  }, [content, summary, currentId, autoSave]);
-
-  // 组件卸载时清理 debounce 计时器
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-    };
-  }, []);
-
-  // ── 会话操作 ──────────────────────────────────────────────
-
-  /** 新建空白会话 */
-  function handleNew() {
-    const session = createEmptySession();
-    saveSession(session);
-    setCurrentId(session.id);
-    setLocalCurrentId(session.id);
-    setContent("");
-    setSummary("");
-    setError("");
-    setSessions(getSessions());
-  }
-
-  /** 切换到指定会话 */
-  function handleSelect(id: string) {
-    // 先保存当前会话（避免切换时丢失未保存内容）
-    if (currentId) {
-      const current = getSessionById(currentId);
-      if (current) {
-        current.content = content;
-        current.summary = summary;
-        current.updatedAt = Date.now();
-        saveSession(current);
-      }
-    }
-
-    setCurrentId(id);
-    setLocalCurrentId(id);
-    const session = getSessionById(id);
-    if (session) {
-      setContent(session.content);
-      setSummary(session.summary);
-      setError("");
-    }
-  }
-
-  /** 删除会话 */
-  function handleDelete(id: string) {
-    deleteSession(id);
-    const remaining = getSessions();
-    setSessions(remaining);
-
-    // 如果删除的是当前会话，切换到剩余的最近会话
-    if (id === currentId) {
-      if (remaining.length > 0) {
-        setCurrentId(remaining[0].id);
-        setLocalCurrentId(remaining[0].id);
-        setContent(remaining[0].content);
-        setSummary(remaining[0].summary);
-      } else {
-        // 全部删完了，创建新会话
-        const session = createEmptySession();
-        saveSession(session);
-        setCurrentId(session.id);
-        setLocalCurrentId(session.id);
-        setSessions(getSessions());
-        setContent("");
-        setSummary("");
-      }
-    }
-
-    setError("");
-  }
-
-  // ── 日报生成 ──────────────────────────────────────────────
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!content.trim() || !currentId) return;
-
-    setLoading(true);
-    setStreaming(false);
-    setError("");
-    setSummary("");
-
-    try {
-      const res = await fetch("/api/summarize", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: content.trim() }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "请求失败");
-        setLoading(false);
-        return;
-      }
-
-      // ── 流式读取 ──────────────────────────────────────
-      const reader = res.body?.getReader();
-      if (!reader) {
-        setError("无法读取响应");
-        setLoading(false);
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let accumulatedSummary = "";
-      setLoading(false); // 结束 loading，开始展示结果区域
-      setStreaming(true); // 进入流式输出状态，显示光标
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        // 追加到累积变量，避免 setSummary 依赖 prev 的 closure 问题
-        accumulatedSummary += decoder.decode(value, { stream: true });
-        setSummary(accumulatedSummary);
-      }
-    } catch {
-      setError("网络错误，请稍后重试");
-      setLoading(false);
-    } finally {
-      setStreaming(false); // 流式输出结束，隐藏光标
-    }
-  }
-
-  // ── UI ───────────────────────────────────────────────────
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="flex h-screen bg-zinc-50 font-sans dark:bg-zinc-950">
-      {/* 左侧边栏 */}
-      <Sidebar
-        sessions={sessions}
-        currentId={currentId}
-        onSelect={handleSelect}
-        onNew={handleNew}
-        onDelete={handleDelete}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+    <div className="flex h-screen bg-background">
+      {/* —— 左侧边栏 —— */}
+      <aside
+        className={cn(
+          "flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
+          sidebarOpen ? "w-72" : "w-16"
+        )}
+      >
+        {/* 头部：logo + 折叠按钮 */}
+        <div
+          className={cn(
+            "flex items-center border-b border-sidebar-border h-14",
+            sidebarOpen ? "justify-between px-4" : "justify-center px-2"
+          )}
+        >
+          {sidebarOpen ? (
+            <>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-semibold text-sm text-sidebar-foreground">
+                  AI 工作台
+                </span>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 rounded-lg hover:bg-sidebar-accent text-muted-foreground transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
 
-      {/* 右侧主内容区 */}
+        {/* 工具选择器 */}
+        <div className="p-3 border-b border-sidebar-border">
+          <button
+            className={cn(
+              "w-full flex items-center gap-3 rounded-lg transition-all duration-200",
+              "hover:bg-sidebar-accent border border-sidebar-border",
+              sidebarOpen ? "p-2.5" : "p-2.5 justify-center"
+            )}
+          >
+            <div
+              className={cn(
+                "w-8 h-8 rounded-lg bg-gradient-to-br flex items-center justify-center shrink-0",
+                activeTool.color
+              )}
+            >
+              <activeTool.icon className="w-4 h-4 text-white" />
+            </div>
+            {sidebarOpen && (
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  {activeTool.name}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {activeTool.description}
+                </p>
+              </div>
+            )}
+          </button>
+        </div>
+
+        {/* 新建按钮 */}
+        <div className={cn("p-3", !sidebarOpen && "px-2")}>
+          <Link href="/daily-digest">
+            <button
+              className={cn(
+                "w-full flex items-center gap-2 rounded-lg",
+                "border border-dashed border-sidebar-border",
+                "hover:bg-sidebar-accent hover:border-sidebar-primary/30",
+                "transition-all duration-200 text-sm font-medium text-sidebar-foreground",
+                sidebarOpen ? "px-3 py-2.5" : "p-2.5 justify-center"
+              )}
+            >
+              <Plus className="w-4 h-4 shrink-0" />
+              {sidebarOpen && <span>新建</span>}
+            </button>
+          </Link>
+        </div>
+
+        {/* 用户区 */}
+        <div
+          className={cn(
+            "mt-auto border-t border-sidebar-border",
+            sidebarOpen ? "p-3" : "p-2"
+          )}
+        >
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-lg transition-all",
+              "hover:bg-sidebar-accent cursor-pointer",
+              sidebarOpen ? "p-2" : "p-2 justify-center"
+            )}
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white text-sm font-medium shrink-0">
+              张
+            </div>
+            {sidebarOpen && (
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-medium text-sidebar-foreground truncate">
+                  张三
+                </p>
+                <p className="text-xs text-muted-foreground">Pro</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      {/* —— 右侧主内容区 —— */}
       <main className="flex-1 overflow-y-auto">
-        <div className="flex flex-col w-full max-w-2xl mx-auto gap-8 py-16 px-8">
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-              📋 日报助手
+        <div className="flex flex-col items-center py-16 px-8 max-w-4xl mx-auto gap-10">
+          {/* 顶部标签 */}
+          <Badge
+            variant="secondary"
+            className="px-4 py-1.5 text-sm rounded-full bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+          >
+            AI 驱动的智能工作台
+          </Badge>
+
+          {/* 欢迎语 */}
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-bold text-foreground">
+              你好，张三
             </h1>
-            <p className="mt-1 text-zinc-500 dark:text-zinc-400">
-              输入今天的工作内容，AI 帮你整理成日报
+            <p className="text-muted-foreground text-lg">
+              选择一个工具，开始高效工作
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <textarea
-              className="w-full h-48 p-4 rounded-xl border border-zinc-200 bg-white text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 resize-none"
-              placeholder="例如：&#10;上午跟产品对齐了新功能需求，确定了排期&#10;下午修了登录页的样式bug&#10;和前端同步了下周的迭代计划"
-              value={content}
-              onChange={(e) => {
-                setContent(e.target.value);
-                // 如果有内容变化，确保已创建会话（首次使用时）
-                if (!currentId) {
-                  const session = createEmptySession();
-                  saveSession(session);
-                  setCurrentId(session.id);
-                  setLocalCurrentId(session.id);
-                  setSessions(getSessions());
-                }
-              }}
-              disabled={loading}
-            />
+          {/* AI 日报 — 主推卡片 */}
+          <Link href="/daily-digest" className="w-full max-w-md block group">
+            <Card className="border-0 bg-gradient-to-br from-blue-950 to-blue-900 hover:from-blue-900 hover:to-blue-800 transition-all duration-300 cursor-pointer group-hover:scale-[1.02] group-hover:shadow-xl group-hover:shadow-blue-500/20">
+              <CardContent className="p-6 flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shrink-0 shadow-lg shadow-blue-500/30">
+                  <FileText className="w-6 h-6 text-white" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-white">AI 日报</h3>
+                  <p className="text-sm text-blue-200/80 mt-1">
+                    智能生成专业日报、周报和工作总结
+                  </p>
+                </div>
+                <div className="self-center text-blue-300/50 group-hover:text-blue-200 group-hover:translate-x-0.5 transition-all">
+                  <ChevronRight className="w-5 h-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
 
-            <button
-              type="submit"
-              disabled={loading || !content.trim()}
-              className="self-end px-6 py-2.5 rounded-lg bg-zinc-900 text-white font-medium hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-            >
-              {loading ? "生成中..." : "生成日报"}
-            </button>
-          </form>
+          {/* 即将上线 */}
+          <div className="w-full max-w-2xl space-y-5">
+            <h2 className="text-lg font-semibold text-foreground text-center">
+              即将上线
+            </h2>
 
-          {error && (
-            <div className="p-4 rounded-xl bg-red-50 text-red-600 text-sm dark:bg-red-950 dark:text-red-400">
-              {error}
+            <div className="grid grid-cols-3 gap-4">
+              {tools.slice(1).map((tool) => (
+                <Card
+                  key={tool.id}
+                  className="border-border/50 bg-card/50 hover:bg-card/80 transition-colors cursor-not-allowed group/tool"
+                >
+                  <CardContent className="p-4 flex flex-col items-center text-center gap-3">
+                    <div
+                      className={cn(
+                        "w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center shrink-0",
+                        tool.color
+                      )}
+                    >
+                      <tool.icon className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {tool.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                        {tool.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Lock className="w-3 h-3" />
+                      即将上线
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          )}
+          </div>
 
-          {summary && (
-            <div className="p-6 rounded-xl border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
-              <h2 className="text-sm font-medium text-zinc-400 mb-4">
-                生成结果
-              </h2>
-              <div className="prose prose-zinc dark:prose-invert max-w-none whitespace-pre-wrap text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">
-                {summary}
-                {/* 流式输出进行中时，显示闪烁光标 */}
-                {streaming && (
-                  <span className="inline-block w-2 h-4 ml-0.5 bg-zinc-400 animate-pulse align-middle" />
-                )}
-              </div>
-            </div>
-          )}
+          {/* 底部链接 */}
+          <div className="flex items-center gap-6 text-sm text-muted-foreground pt-8">
+            <span>AI 工作台 v1.0</span>
+            <span className="hover:text-foreground cursor-pointer transition-colors">
+              帮助中心
+            </span>
+            <span className="hover:text-foreground cursor-pointer transition-colors">
+              反馈建议
+            </span>
+          </div>
         </div>
       </main>
     </div>
